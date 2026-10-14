@@ -29,12 +29,20 @@ jobs:
       - name: Prepare project source
         run: |
           if [ -f "$GITHUB_WORKSPACE/.github/project.b64" ]; then
-            echo "Using embedded project bundle (.github/project.b64)"
-            base64 -d "$GITHUB_WORKSPACE/.github/project.b64" > /tmp/project.zip
+            echo "Found .github/project.b64, size: $(wc -c < "$GITHUB_WORKSPACE/.github/project.b64") bytes (expected ~45388)"
+            if base64 -d "$GITHUB_WORKSPACE/.github/project.b64" > /tmp/project.zip 2>/tmp/b64err.txt; then
+              echo "base64 decode OK"
+            else
+              echo "base64 DECODE FAILED:"; cat /tmp/b64err.txt
+              exit 1
+            fi
             rm -rf /tmp/project-src && mkdir -p /tmp/project-src
-            unzip -q /tmp/project.zip -d /tmp/project-src
+            if unzip -o /tmp/project.zip -d /tmp/project-src 2>&1 | tail -3; then
+              echo "unzip done"
+            fi
             PROJ_DIR=$(dirname "$(find /tmp/project-src -name 'settings.gradle' | head -n 1)")
           else
+            echo "project.b64 NOT in repo, searching repo files..."
             PROJ_DIR=$(dirname "$(find "$GITHUB_WORKSPACE" -name 'settings.gradle' | head -n 1)")
           fi
           if [ -z "$PROJ_DIR" ] || [ "$PROJ_DIR" = "." ]; then
