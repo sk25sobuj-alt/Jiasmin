@@ -1,68 +1,31 @@
-name: Build Debug APK
-
+Name: Build LIA APK
 on:
   push:
-    branches: [ "main" ]
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+      - name: Unzip project
+        run: unzip -o lia-native-*.zip -d build-src
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      # NOTE: ubuntu-latest runner-e Android SDK age thekei install kora thake
-      # (ANDROID_HOME set kora), tai alada "Set up Android SDK" step dorkar nai.
-      # Oi step ta license prompt-e atke giye fail korchilo.
-
-      - name: Set up Gradle (no wrapper needed)
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Prepare project source
+      - name: Set up Android SDK
         run: |
-          if [ -f "$GITHUB_WORKSPACE/.github/project.b64" ]; then
-            echo "Found .github/project.b64, size: $(wc -c < "$GITHUB_WORKSPACE/.github/project.b64") bytes (expected ~45388)"
-            if base64 -d "$GITHUB_WORKSPACE/.github/project.b64" > /tmp/project.zip 2>/tmp/b64err.txt; then
-              echo "base64 decode OK"
-            else
-              echo "base64 DECODE FAILED:"; cat /tmp/b64err.txt
-              exit 1
-            fi
-            rm -rf /tmp/project-src && mkdir -p /tmp/project-src
-            if unzip -o /tmp/project.zip -d /tmp/project-src 2>&1 | tail -3; then
-              echo "unzip done"
-            fi
-            PROJ_DIR=$(dirname "$(find /tmp/project-src -name 'settings.gradle' | head -n 1)")
-          else
-            echo "project.b64 NOT in repo, searching repo files..."
-            PROJ_DIR=$(dirname "$(find "$GITHUB_WORKSPACE" -name 'settings.gradle' | head -n 1)")
-          fi
-          if [ -z "$PROJ_DIR" ] || [ "$PROJ_DIR" = "." ]; then
-            echo "ERROR: settings.gradle not found - project source missing!"
-            exit 1
-          fi
-          echo "Project dir: $PROJ_DIR"
-          echo "PROJ_DIR=$PROJ_DIR" >> "$GITHUB_ENV"
-
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" "platform-tools"
       - name: Build debug APK
-        run: gradle -p "$PROJ_DIR" assembleDebug
-
-      - name: Rename APK
         run: |
-          APK=$(find "$PROJ_DIR" -path '*outputs/apk/debug/app-debug.apk' | head -n 1)
-          mv "$APK" "$(dirname "$APK")/Jiasmin-Ai-Assistant.apk"
-          echo "APK_PATH=$(dirname "$APK")/Jiasmin-Ai-Assistant.apk" >> "$GITHUB_ENV"
-
-      - name: Upload APK artifact
+          cd build-src
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Jiasmin-Ai-Assistant-apk
-          path: ${{ env.APK_PATH }}
+          name: lia-apk
+          path: build-src/app/build/outputs/apk/debug/app-debug.apk
